@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Terms & Conditions Management</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .form-container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 10px;
+            font-weight: bold;
+            color: #333;
+        }
+        textarea {
+            width: 100%;
+            height: 300px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+            font-size: 14px;
+            line-height: 1.5;
+            resize: vertical;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 12px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            width: 100%;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .nav-links {
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        .nav-links a {
+            color: #666;
+            text-decoration: none;
+            margin: 0 10px;
+        }
+        .nav-links a:hover {
+            color: #333;
+            text-decoration: underline;
+        }
+        #message {
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+            display: none;
+        }
+        .success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="nav-links">
+            <a href="/admin">← Back to Admin</a>
+        </div>
+        
+        <h1>Terms & Conditions Management</h1>
+        
+        <div id="message"></div>
+        
+        <div class="form-container">
+            <form id="termsForm">
+                <div class="form-group">
+                    <label for="terms">Terms & Conditions Content:</label>
+                    <textarea id="terms" required placeholder="Enter your terms and conditions here..."></textarea>
+                </div>
+                <button type="submit">Save Terms & Conditions</button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = '/api';
+
+        function showMessage(message, isError = false) {
+            const messageDiv = document.getElementById('message');
+            messageDiv.textContent = message;
+            messageDiv.className = isError ? 'error' : 'success';
+            messageDiv.style.display = 'block';
+            setTimeout(() => {
+                messageDiv.style.display = 'none';
+            }, 5000);
+        }
+
+        async function fetchTerms() {
+            try {
+                const response = await fetch(`${API_URL}/terms`);
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                const data = await response.json();
+                document.getElementById('terms').value = data.content || '';
+            } catch (error) {
+                console.error('Error fetching terms:', error);
+                showMessage('Failed to fetch terms: ' + error.message, true);
+            }
+        }
+
+        document.getElementById('termsForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const content = document.getElementById('terms').value;
+            
+            try {
+                const response = await fetch(`${API_URL}/terms`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ content })
+                });
+                
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+                }
+                
+                showMessage('Terms & conditions saved successfully');
+            } catch (error) {
+                console.error('Error saving terms:', error);
+                showMessage('Failed to save terms: ' + error.message, true);
+            }
+        });
+
+        // Initial load
+        fetchTerms();
+    </script>
+</body>
+</html>

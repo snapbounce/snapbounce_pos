@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>POS Admin</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .date-selector {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        .summary-card {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        .summary-item {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 6px;
+            text-align: center;
+        }
+        .summary-item h3 {
+            margin: 0;
+            color: #6c757d;
+            font-size: 0.9rem;
+        }
+        .summary-item p {
+            margin: 10px 0 0;
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #28a745;
+        }
+        .transactions-list {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .transaction-item {
+            border: 1px solid #dee2e6;
+            border-radius: 6px;
+            padding: 15px;
+            margin-bottom: 15px;
+        }
+        .transaction-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #dee2e6;
+        }
+        .transaction-items {
+            margin: 10px 0;
+        }
+        .transaction-item-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 5px 0;
+            color: #666;
+        }
+        .transaction-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid #dee2e6;
+            font-size: 0.9rem;
+            color: #666;
+        }
+        .status-badge {
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            font-weight: bold;
+            margin-left: 8px;
+        }
+        .status-completed {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .status-voided {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        .void-timestamp {
+            color: #dc3545;
+        }
+        .nav-links {
+            margin-bottom: 20px;
+            background: white;
+            padding: 15px 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .nav-links a {
+            color: #007bff;
+            text-decoration: none;
+            margin-right: 20px;
+            padding: 8px 16px;
+            border-radius: 4px;
+            transition: background-color 0.2s;
+        }
+        .nav-links a:hover {
+            background-color: #f8f9fa;
+        }
+        .nav-links a.active {
+            background-color: #007bff;
+            color: white;
+        }
+        button {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            background-color: #007bff;
+            color: white;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        input[type="date"] {
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="nav-links">
+            <a href="/admin" class="active">Daily Report</a>
+            <a href="/admin/items">Manage Items</a>
+            <a href="/admin/terms">Manage Terms</a>
+        </div>
+
+        <div class="header">
+            <h1>Daily Report</h1>
+            <div class="date-selector">
+                <input type="date" id="dateSelector">
+                <button onclick="loadDailyReport()">Load Report</button>
+            </div>
+        </div>
+
+        <div class="summary-card">
+            <div class="summary-grid">
+                <div class="summary-item">
+                    <h3>Total Transactions</h3>
+                    <p id="totalTransactions">0</p>
+                </div>
+                <div class="summary-item">
+                    <h3>Total Sales</h3>
+                    <p id="totalSales">$0.00</p>
+                </div>
+                <div class="summary-item">
+                    <h3>Average Transaction</h3>
+                    <p id="averageTransaction">$0.00</p>
+                </div>
+                <div class="summary-item">
+                    <h3>Voided Transactions</h3>
+                    <p id="voidedTransactions" style="color: #dc3545;">0</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="transactions-list" id="transactionsList">
+            <!-- Transactions will be loaded here -->
+        </div>
+    </div>
+
+    <script>
+        // Set default date to today
+        document.getElementById('dateSelector').valueAsDate = new Date();
+
+        function formatCurrency(amount) {
+            return `$${Number(amount).toFixed(2)}`;
+        }
+
+        function formatDate(dateString) {
+            return new Date(dateString).toLocaleString();
+        }
+
+        async function loadDailyReport() {
+            try {
+                const date = document.getElementById('dateSelector').value;
+                console.log('Loading report for date:', date);
+                const response = await fetch(`/api/transactions/daily-report?date=${date}`);
+                if (!response.ok) throw new Error('Failed to fetch report');
+                const data = await response.json();
+                console.log('Report data:', data);
+                
+                // Update summary
+                document.getElementById('totalTransactions').textContent = data.summary.total_transactions;
+                document.getElementById('totalSales').textContent = formatCurrency(data.summary.total_sales);
+                document.getElementById('averageTransaction').textContent = formatCurrency(data.summary.average_transaction);
+                document.getElementById('voidedTransactions').textContent = data.summary.voided_transactions;
+
+                // Update transactions list
+                const transactionsList = document.getElementById('transactionsList');
+                transactionsList.innerHTML = data.transactions.map(transaction => `
+                    <div class="transaction-item">
+                        <div class="transaction-header">
+                            <div>
+                                <strong>Transaction #${transaction.id}</strong>
+                                <span class="status-badge ${transaction.status === 'completed' ? 'status-completed' : 'status-voided'}">
+                                    ${transaction.status.toUpperCase()}
+                                </span>
+                            </div>
+                            <strong>${formatCurrency(transaction.total_amount)}</strong>
+                        </div>
+                        <div class="transaction-items">
+                            ${transaction.items.map(item => `
+                                <div class="transaction-item-row">
+                                    <span>${item.item_name} × ${item.quantity}</span>
+                                    <span>${formatCurrency(item.price * item.quantity)}</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                        <div class="transaction-footer">
+                            <span>Date: ${formatDate(transaction.transaction_date)}</span>
+                            ${transaction.voided_at ? 
+                                `<span class="void-timestamp">Voided: ${formatDate(transaction.voided_at)}</span>` 
+                                : ''}
+                        </div>
+                    </div>
+                `).join('');
+
+            } catch (error) {
+                console.error('Error loading daily report:', error);
+                alert('Failed to load daily report');
+            }
+        }
+
+        // Load initial report
+        loadDailyReport();
+    </script>
+</body>
+</html>
