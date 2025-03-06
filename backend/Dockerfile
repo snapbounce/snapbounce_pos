@@ -4,12 +4,10 @@ WORKDIR /usr/src/app
 
 COPY package*.json ./
 
-RUN rm -rf node_modules
-RUN npm cache clean --force
 RUN npm install
 
 COPY . .
 
-EXPOSE 5173
+EXPOSE 3000
 
 CMD ["npm", "run", "dev"]

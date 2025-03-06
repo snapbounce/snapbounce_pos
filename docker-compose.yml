@@ -1,24 +1,6 @@
 version: '3.8'
 
 services:
-  backend:
-    build: .
-    ports:
-      - "3000:3000"
-    environment:
-      - NODE_ENV=development
-      - DB_HOST=postgres
-      - DB_PORT=5432
-      - DB_USER=${DB_USER}
-      - DB_PASSWORD=${DB_PASSWORD}
-      - DB_NAME=${DB_NAME}
-    depends_on:
-      - postgres
-    volumes:
-      - ./:/usr/src/app
-      - /usr/src/app/node_modules
-    command: npm run dev
-
   frontend:
     build: ./frontend
     ports:
@@ -32,15 +14,31 @@ services:
     depends_on:
       - backend
 
+  backend:
+    build: ./backend
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./backend:/usr/src/app
+      - /usr/src/app/node_modules
+    depends_on:
+      - postgres
+    environment:
+      - PGUSER=postgres
+      - PGPASSWORD=postgres
+      - PGDATABASE=snapbounce_pos
+      - PGHOST=postgres
+
   postgres:
     image: postgres:15-alpine
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=snapbounce_pos
     ports:
       - "5432:5432"
-    environment:
-      - POSTGRES_USER=${DB_USER}
-      - POSTGRES_PASSWORD=${DB_PASSWORD}
-      - POSTGRES_DB=${DB_NAME}
     volumes:
+      - ./backend/init.sql:/docker-entrypoint-initdb.d/init.sql
       - postgres_data:/var/lib/postgresql/data
 
 volumes:
