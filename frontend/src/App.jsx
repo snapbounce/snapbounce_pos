@@ -57,6 +57,7 @@ function App() {
               </svg>
             </button>
           </div>
+
           <div className={`nav-links ${isMobileMenuOpen ? 'show' : ''}`}>
             <Link to="/" className={`nav-link ${location.pathname === '/' ? 'active' : ''}`}>
               POS

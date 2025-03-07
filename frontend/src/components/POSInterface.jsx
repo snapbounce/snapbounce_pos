@@ -7,7 +7,7 @@ export default function POSInterface() {
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [showConfirmation, setShowConfirmation] = useState(false);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [selectedTransaction, setSelectedTransaction] = useState(null);
 
   useEffect(() => {
@@ -106,7 +106,7 @@ export default function POSInterface() {
     }
   };
 
-  const addToCart = (item) => {
+  const handleAddToCart = (item) => {
     if (item.stock <= 0) return;
     
     const existingItem = cart.find(cartItem => cartItem.id === item.id);
@@ -122,21 +122,8 @@ export default function POSInterface() {
     }
   };
 
-  const removeFromCart = (itemId) => {
-    setCart(cart.filter(item => item.id !== itemId));
-  };
-
-  const updateQuantity = (index, delta) => {
-    setCart(cart.map((item, i) => {
-      if (i === index) {
-        const newQuantity = item.quantity + delta;
-        const maxQuantity = items.find(i => i.id === item.id)?.stock || 0;
-        if (newQuantity <= 0) return null;
-        if (newQuantity > maxQuantity) return item;
-        return { ...item, quantity: newQuantity };
-      }
-      return item;
-    }).filter(Boolean));
+  const handleRemoveFromCart = (index) => {
+    setCart(cart.filter((item, i) => i !== index));
   };
 
   const calculateTotal = () => {
@@ -145,10 +132,10 @@ export default function POSInterface() {
 
   const handleCheckout = async () => {
     if (cart.length === 0) return;
-    setShowConfirmation(true);
+    setShowConfirmModal(true);
   };
 
-  const confirmTransaction = async () => {
+  const handleConfirmTransaction = async () => {
     try {
       setLoading(true);
       setError(null);
@@ -184,7 +171,7 @@ export default function POSInterface() {
 
       setCart([]);
       await fetchTransactions();
-      setShowConfirmation(false);
+      setShowConfirmModal(false);
     } catch (error) {
       console.error('Error creating transaction:', error);
       setError(error.message);
@@ -220,54 +207,63 @@ export default function POSInterface() {
     return isNaN(number) ? '0.00' : number.toFixed(2);
   };
 
+  const handleViewTransactions = () => {
+    setShowTransactionsModal(true);
+  };
+
+  const handleViewTransactionDetails = (transaction) => {
+    setSelectedTransaction(transaction);
+  };
+
   return (
-    <div className="pos-interface">
-      <div className="pos-container">
-        <div className="main-content">
-          <div className="items-section">
-            <div className="section-header">
-              <h2>Available Items</h2>
+    <div className="pos-container">
+      <header className="pos-header">
+        <h1>SnapBounce POS</h1>
+        <button className="view-transactions-btn" onClick={handleViewTransactions}>
+          View Transactions
+        </button>
+      </header>
+      
+      <div className="pos-content">
+        <div className="items-panel">
+          {loading ? (
+            <div className="loading-state">
+              <div className="loading-spinner"></div>
+              <p>Loading items...</p>
             </div>
-            {loading ? (
-              <div className="loading">Loading items...</div>
-            ) : error ? (
-              <div className="error-message">{error}</div>
-            ) : (
-              <div className="items-grid">
-                {items.map(item => (
-                  <div
-                    key={item.id}
-                    className="item-card"
-                    onClick={() => addToCart(item)}
-                  >
-                    <h3 className="item-name">{item.name}</h3>
-                    <p className="item-price">${formatPrice(item.price)}</p>
-                  </div>
-                ))}
-              </div>
-            )}
+          ) : error ? (
+            <div className="error-state">
+              <p>{error}</p>
+            </div>
+          ) : (
+            <div className="items-grid">
+              {items.map((item) => (
+                <div 
+                  key={item.id} 
+                  className="item-card"
+                  onClick={() => handleAddToCart(item)}
+                >
+                  <h3>{item.name}</h3>
+                  <p>${item.price.toFixed(2)}</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="cart-panel">
+          <div className="cart-header">
+            <h2>Current Transaction</h2>
           </div>
-
-          <div className="cart-section">
-            <div className="section-header">
-              <h2>Current Transaction</h2>
-              <button 
-                className="view-transactions-btn"
-                onClick={() => setShowTransactionsModal(true)}
-              >
-                View Transactions
-              </button>
-            </div>
-            
-            {error && (
-              <div className="error-message">
-                {error}
-              </div>
-            )}
-
+          <div className="cart-content">
             {cart.length === 0 ? (
               <div className="empty-cart">
-                <p>No items in cart</p>
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="9" cy="21" r="1"></circle>
+                  <circle cx="20" cy="21" r="1"></circle>
+                  <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path>
+                </svg>
+                <span>Cart is empty</span>
               </div>
             ) : (
               <>
@@ -276,45 +272,31 @@ export default function POSInterface() {
                     <div key={index} className="cart-item">
                       <div className="cart-item-info">
                         <span className="cart-item-name">{item.name}</span>
-                        <span className="cart-item-price">
-                          ${formatPrice(item.price * item.quantity)}
-                        </span>
+                        <span className="cart-item-price">${item.price.toFixed(2)}</span>
                       </div>
                       <div className="cart-item-quantity">
-                        <button
-                          className="quantity-btn"
-                          onClick={() => updateQuantity(index, -1)}
-                        >
-                          -
-                        </button>
-                        <span>{item.quantity}</span>
-                        <button
-                          className="quantity-btn"
-                          onClick={() => updateQuantity(index, 1)}
-                        >
-                          +
-                        </button>
+                        <span>x{item.quantity}</span>
                         <button 
                           className="remove-btn"
-                          onClick={() => removeFromCart(item.id)}
+                          onClick={() => handleRemoveFromCart(index)}
                         >
-                          ×
+                          ✕
                         </button>
                       </div>
                     </div>
                   ))}
                 </div>
+                
                 <div className="cart-footer">
                   <div className="cart-total">
-                    <span>Total:</span>
-                    <span>${formatPrice(calculateTotal())}</span>
+                    <span className="total-label">Total</span>
+                    <span className="total-amount">${formatPrice(calculateTotal())}</span>
                   </div>
                   <button 
-                    className="checkout-btn"
+                    className="checkout-button"
                     onClick={handleCheckout}
-                    disabled={loading}
                   >
-                    {loading ? 'Processing...' : 'Checkout'}
+                    Complete Transaction
                   </button>
                 </div>
               </>
@@ -323,63 +305,109 @@ export default function POSInterface() {
         </div>
       </div>
 
-      {showConfirmation && (
+      {showConfirmModal && (
         <div className="modal-overlay">
-          <div className="modal-content">
+          <div className="modal">
             <div className="modal-header">
               <h2>Confirm Transaction</h2>
-              <button 
-                className="close-btn"
-                onClick={() => setShowConfirmation(false)}
-              >
-                ×
-              </button>
+              <button className="close-button" onClick={() => setShowConfirmModal(false)}>×</button>
             </div>
-            <div className="modal-body">
-              <div className="confirmation-items">
-                <h3>Items:</h3>
-                {cart.map(item => (
-                  <div key={item.id} className="confirmation-item">
+            <div className="modal-content">
+              <div className="transaction-items">
+                <h3>Order Summary</h3>
+                {cart.map((item, index) => (
+                  <div key={index} className="transaction-item">
                     <div className="item-details">
-                      <span className="item-name">
-                        {item.name}
-                      </span>
-                      <span className="item-quantity">
-                        × {item.quantity}
-                      </span>
+                      <span className="item-name">{item.name}</span>
+                      <span className="item-quantity">× {item.quantity}</span>
                     </div>
-                    <span className="item-price">
-                      ${formatPrice(item.price * item.quantity)}
-                    </span>
+                    <span className="item-price">${(item.price * item.quantity).toFixed(2)}</span>
                   </div>
                 ))}
-                <div className="confirmation-total">
-                  <span>Total:</span>
-                  <span>${formatPrice(calculateTotal())}</span>
+                <div className="transaction-total">
+                  <span>Total</span>
+                  <span>${calculateTotal().toFixed(2)}</span>
                 </div>
               </div>
-              <div className="terms-and-conditions">
-                <h3>Terms and Conditions:</h3>
+
+              <div className="terms-section">
+                <h3>Terms and Conditions</h3>
                 <ul>
                   <li>All sales are final</li>
                   <li>Items cannot be refunded once purchased</li>
                   <li>Check your items before completing the transaction</li>
                 </ul>
               </div>
-              <div className="confirmation-actions">
-                <button 
-                  className="cancel-btn"
-                  onClick={() => setShowConfirmation(false)}
-                >
+
+              <div className="modal-actions">
+                <button className="cancel-btn" onClick={() => setShowConfirmModal(false)}>
                   Cancel
                 </button>
-                <button 
-                  className="confirm-btn"
-                  onClick={confirmTransaction}
-                  disabled={loading}
-                >
-                  {loading ? 'Processing...' : 'Confirm Transaction'}
+                <button className="confirm-btn" onClick={handleConfirmTransaction}>
+                  Confirm Transaction
                 </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {selectedTransaction && (
+        <div className="modal-overlay">
+          <div className="modal transaction-details">
+            <div className="modal-header">
+              <button 
+                className="back-button" 
+                onClick={() => {
+                  setSelectedTransaction(null);
+                  setShowTransactionsModal(true);
+                }}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M19 12H5M12 19l-7-7 7-7"/>
+                </svg>
+                <span>Back</span>
+              </button>
+              <div className="transaction-meta">
+                <span className={`transaction-status ${selectedTransaction.status.toLowerCase()}`}>
+                  {selectedTransaction.status}
+                </span>
+              </div>
+            </div>
+            
+            <div className="modal-content">
+              <div className="transaction-items">
+                <h3>Items</h3>
+                {selectedTransaction.items.map((item, index) => (
+                  <div key={index} className="transaction-item">
+                    <div className="item-details">
+                      <span className="item-name">{item.item_name}</span>
+                      <span className="item-quantity">× {item.quantity}</span>
+                    </div>
+                    <span className="item-price">${(item.price * item.quantity).toFixed(2)}</span>
+                  </div>
+                ))}
+                <div className="transaction-total">
+                  <span>Total</span>
+                  <span>${selectedTransaction.total_amount.toFixed(2)}</span>
+                </div>
+              </div>
+              
+              <div className="modal-actions transaction-actions">
+                <button 
+                  className="close-btn secondary-btn" 
+                  onClick={() => setSelectedTransaction(null)}
+                >
+                  Close
+                </button>
+                {selectedTransaction.status !== 'VOIDED' && (
+                  <button 
+                    className="void-btn danger-btn" 
+                    onClick={() => voidTransaction(selectedTransaction.id)}
+                  >
+                    Void Transaction
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -388,73 +416,64 @@ export default function POSInterface() {
 
       {showTransactionsModal && (
         <div className="modal-overlay">
-          <div className="modal-content">
+          <div className="modal">
             <div className="modal-header">
-              <h2>Recent Transactions</h2>
-              <button onClick={() => setShowTransactionsModal(false)} className="close-btn">×</button>
+              <h2>Transaction History</h2>
+              <button className="close-button" onClick={() => setShowTransactionsModal(false)}>×</button>
             </div>
-            <div className="modal-body">
-              {loading ? (
-                <div className="loading">Loading transactions...</div>
-              ) : error ? (
-                <div className="error-message">{error}</div>
-              ) : transactions.length === 0 ? (
-                <div className="no-transactions">
-                  <p>No transactions found</p>
-                </div>
-              ) : (
-                <div className="transactions-list">
-                  {transactions.map(transaction => {
-                    console.log('Rendering transaction:', transaction);
-                    return (
-                      <div key={transaction.id} className="transaction-card">
-                        <div className="transaction-header">
-                          <div className="transaction-date">
-                            {new Date(transaction.transaction_date).toLocaleString(undefined, {
-                              year: 'numeric',
-                              month: 'short',
-                              day: 'numeric',
-                              hour: '2-digit',
-                              minute: '2-digit'
-                            })}
-                          </div>
-                          <div className="transaction-status">
-                            <span className={`status-badge ${transaction.status}`}>
-                              {transaction.status}
-                            </span>
-                          </div>
-                        </div>
-                        
-                        <div className="transaction-items">
-                          {transaction.items && transaction.items.map((item, index) => (
-                            <div key={index} className="item-row">
-                              <span>{item.item_name} × {item.quantity}</span>
-                              <span>${formatPrice(item.price * item.quantity)}</span>
-                            </div>
-                          ))}
-                        </div>
-
-                        <div className="transaction-total">
-                          <span>Total</span>
-                          <span>${formatPrice(transaction.total_amount)}</span>
-                        </div>
-
-                        {transaction.status === 'completed' && (
-                          <div className="transaction-actions">
-                            <button
-                              className="void-btn"
-                              onClick={() => voidTransaction(transaction.id)}
-                              disabled={loading}
-                            >
-                              Void Transaction
-                            </button>
-                          </div>
-                        )}
+            <div className="modal-content">
+              <div className="transactions-list">
+                {transactions.map((transaction) => (
+                  <div key={transaction.id} className="transaction-card">
+                    <div className="transaction-info">
+                      <div className="transaction-header">
+                        <span className="transaction-date">
+                          {new Date(transaction.transaction_date).toLocaleString('en-US', {
+                            day: 'numeric',
+                            month: 'short',
+                            year: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          })}
+                        </span>
+                        <span className={`transaction-status ${transaction.status.toLowerCase()}`}>
+                          {transaction.status}
+                        </span>
                       </div>
-                    );
-                  })}
-                </div>
-              )}
+                      <div className="transaction-items-summary">
+                        {transaction.items.map((item, idx) => (
+                          <div key={idx} className="transaction-item-brief">
+                            {item.item_name} × {item.quantity} ${(item.price * item.quantity).toFixed(2)}
+                          </div>
+                        ))}
+                      </div>
+                      <div className="transaction-total">
+                        <span>Total:</span>
+                        <span>${transaction.total_amount.toFixed(2)}</span>
+                      </div>
+                    </div>
+                    <div className="transaction-actions">
+                      {transaction.status !== 'VOIDED' && (
+                        <button
+                          className="void-btn danger-btn"
+                          onClick={() => voidTransaction(transaction.id)}
+                        >
+                          Void Transaction
+                        </button>
+                      )}
+                      <button
+                        className="view-details-btn secondary-btn"
+                        onClick={() => {
+                          setSelectedTransaction(transaction);
+                          setShowTransactionsModal(false);
+                        }}
+                      >
+                        View Details
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </div>
