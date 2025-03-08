@@ -3,16 +3,32 @@ import './AdminInterface.css';
 
 export default function AdminInterface() {
   const [items, setItems] = useState([]);
-  const [dailyReport, setDailyReport] = useState(null);
+  const [dailyReport, setDailyReport] = useState({ transactions: [], total_transactions: 0, total_sales: 0 });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [editingItem, setEditingItem] = useState(null);
   const [newItem, setNewItem] = useState({ name: '', price: '', stock: '' });
+  const [selectedDate, setSelectedDate] = useState(() => {
+    // Get current date in Singapore timezone
+    const sgDate = new Date().toLocaleString('en-US', { 
+      timeZone: 'Asia/Singapore',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    });
+    const [month, day, year] = sgDate.split('/');
+    return `${year}-${month}-${day}`;
+  });
 
   useEffect(() => {
     fetchItems();
-    fetchDailyReport();
   }, []);
+
+  useEffect(() => {
+    if (selectedDate) {
+      fetchDailyReport(selectedDate);
+    }
+  }, [selectedDate]);
 
   const fetchItems = async () => {
     try {
@@ -20,7 +36,8 @@ export default function AdminInterface() {
       setError(null);
       const response = await fetch('http://localhost:3000/api/items');
       if (!response.ok) {
-        throw new Error('Failed to fetch items');
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to fetch items');
       }
       const data = await response.json();
       setItems(data);
@@ -32,18 +49,20 @@ export default function AdminInterface() {
     }
   };
 
-  const fetchDailyReport = async () => {
+  const fetchDailyReport = async (date) => {
     try {
       setLoading(true);
       setError(null);
-      const response = await fetch('http://localhost:3000/api/daily-report');
+      
+      const response = await fetch(`/api/daily-report?date=${date}`);
       if (!response.ok) {
-        throw new Error('Failed to fetch daily report');
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to fetch daily report');
       }
       const data = await response.json();
-      setDailyReport(data);
+      setDailyReport(data || { transactions: [], total_transactions: 0, total_sales: 0 });
     } catch (error) {
-      console.error('Error fetching daily report:', error);
+      console.error('Error:', error);
       setError(error.message);
     } finally {
       setLoading(false);
@@ -63,7 +82,8 @@ export default function AdminInterface() {
         body: JSON.stringify(newItem),
       });
       if (!response.ok) {
-        throw new Error('Failed to create item');
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to create item');
       }
       await fetchItems();
       setNewItem({ name: '', price: '', stock: '' });
@@ -88,7 +108,8 @@ export default function AdminInterface() {
         body: JSON.stringify(editingItem),
       });
       if (!response.ok) {
-        throw new Error('Failed to update item');
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to update item');
       }
       await fetchItems();
       setEditingItem(null);
@@ -109,7 +130,8 @@ export default function AdminInterface() {
         method: 'DELETE',
       });
       if (!response.ok) {
-        throw new Error('Failed to delete item');
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to delete item');
       }
       await fetchItems();
     } catch (error) {
@@ -120,10 +142,50 @@ export default function AdminInterface() {
     }
   };
 
-  const formatPrice = (price) => {
-    const number = typeof price === 'string' ? parseFloat(price) : price;
-    return isNaN(number) ? '0.00' : number.toFixed(2);
+  const formatTime = (dateString) => {
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleTimeString('en-US', {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false,
+        timeZone: 'Asia/Singapore'
+      });
+    } catch (error) {
+      console.error('Error formatting time:', error);
+      return 'Invalid time';
+    }
   };
+
+  const formatDate = (dateString) => {
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleDateString('en-US', {
+        timeZone: 'Asia/Singapore',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      });
+    } catch (error) {
+      console.error('Error formatting date:', error);
+      return 'Invalid date';
+    }
+  };
+
+  const formatPrice = (price) => {
+    return Number(price || 0).toFixed(2);
+  };
+
+  // Get current date in Singapore timezone for max date
+  const maxDate = new Date().toLocaleString('en-US', { 
+    timeZone: 'Asia/Singapore',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  });
+  const [month, day, year] = maxDate.split('/');
+  const maxDateFormatted = `${year}-${month}-${day}`;
 
   return (
     <div className="admin-interface">
@@ -131,36 +193,61 @@ export default function AdminInterface() {
 
       {error && (
         <div className="error-message">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="12" y1="8" x2="12" y2="12"></line>
+            <line x1="12" y1="16" x2="12" y2="16"></line>
+          </svg>
           {error}
         </div>
       )}
 
       <section className="daily-report">
         <h2>Daily Report</h2>
+        
+        <div className="date-picker">
+          <label htmlFor="reportDate">Select Date: </label>
+          <input 
+            type="date" 
+            id="reportDate"
+            value={selectedDate}
+            onChange={(e) => setSelectedDate(e.target.value)}
+            min="2024-01-01"
+            max={maxDateFormatted}
+          />
+        </div>
+
         {loading ? (
           <div className="loading">Loading report...</div>
-        ) : dailyReport ? (
-          <div className="report-content">
+        ) : error ? (
+          <div className="error-message">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="12" cy="12" r="10"></circle>
+              <line x1="12" y1="8" x2="12" y2="12"></line>
+              <line x1="12" y1="16" x2="12" y2="16"></line>
+            </svg>
+            {error}
+          </div>
+        ) : (
+          <>
             <div className="report-summary">
-              <div className="summary-item">
-                <label>Date:</label>
-                <span>{new Date(dailyReport.date).toLocaleDateString()}</span>
-              </div>
               <div className="summary-item">
                 <label>Total Transactions:</label>
                 <span>{dailyReport.total_transactions}</span>
               </div>
               <div className="summary-item">
                 <label>Total Sales:</label>
-                <span>${formatPrice(dailyReport.total_sales || 0)}</span>
+                <span>${formatPrice(dailyReport.total_sales)}</span>
               </div>
             </div>
-            <div className="report-transactions">
-              <h3>Today's Transactions</h3>
+
+            <div className="transactions-table">
+              <h3>Transactions for {formatDate(selectedDate)}</h3>
               {dailyReport.transactions?.length > 0 ? (
                 <table>
                   <thead>
                     <tr>
+                      <th>ID</th>
                       <th>Time</th>
                       <th>Items</th>
                       <th>Total</th>
@@ -168,29 +255,40 @@ export default function AdminInterface() {
                   </thead>
                   <tbody>
                     {dailyReport.transactions.map(transaction => (
-                      <tr key={transaction.id}>
-                        <td>{new Date(transaction.transaction_date).toLocaleTimeString()}</td>
+                      <tr 
+                        key={`${transaction.id}-${transaction.event_type}`}
+                        className={transaction.event_type === 'void' ? 'voided-transaction' : ''}
+                      >
+                        <td>#{transaction.id}</td>
                         <td>
-                          <ul>
-                            {transaction.items.map((item, index) => (
-                              <li key={index}>
-                                {item.item_name} × {item.quantity}
-                              </li>
-                            ))}
-                          </ul>
+                          {formatTime(transaction.event_time)}
+                          {transaction.event_type === 'void' && (
+                            <span className="voided-badge">VOIDED</span>
+                          )}
                         </td>
-                        <td>${formatPrice(transaction.total_amount)}</td>
+                        <td>
+                          {transaction.items?.map((item, index) => (
+                            <div key={index}>
+                              {item.item_name} × {item.quantity}
+                            </div>
+                          ))}
+                        </td>
+                        <td>
+                          {transaction.event_type === 'void' ? (
+                            `-$${formatPrice(transaction.total_amount)}`
+                          ) : (
+                            `$${formatPrice(transaction.total_amount)}`
+                          )}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               ) : (
-                <p>No transactions today</p>
+                <div className="no-transactions">No transactions found for this date</div>
               )}
             </div>
-          </div>
-        ) : (
-          <div>No report available</div>
+          </>
         )}
       </section>
 

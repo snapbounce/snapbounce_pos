@@ -9,13 +9,14 @@ CREATE TABLE IF NOT EXISTS transactions (
   id SERIAL PRIMARY KEY,
   transaction_date TIMESTAMP NOT NULL DEFAULT NOW(),
   total_amount DECIMAL(10,2) NOT NULL,
-  status VARCHAR(50) NOT NULL DEFAULT 'completed'
+  status VARCHAR(50) NOT NULL DEFAULT 'completed',
+  voided_at TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS transaction_items (
   id SERIAL PRIMARY KEY,
   transaction_id INTEGER REFERENCES transactions(id),
-  item_id INTEGER REFERENCES items(id),
+  item_name VARCHAR(255) NOT NULL,
   quantity INTEGER NOT NULL,
   price DECIMAL(10,2) NOT NULL
 );

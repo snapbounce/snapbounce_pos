@@ -1,3 +1,6 @@
+// Set default timezone for the application
+process.env.TZ = 'Asia/Singapore';
+
 const express = require('express');
 const cors = require('cors');
 const { Pool } = require('pg');
@@ -13,6 +16,11 @@ const pool = new Pool({
   database: process.env.PGDATABASE || 'snapbounce_pos',
   password: process.env.PGPASSWORD || 'postgres',
   port: process.env.PGPORT || 5432,
+});
+
+// Set timezone for PostgreSQL connection
+pool.on('connect', (client) => {
+  client.query('SET timezone = "Asia/Singapore";');
 });
 
 // Test database connection
@@ -154,31 +162,38 @@ app.post('/api/transactions/:id/void', async (req, res) => {
     
     // Get transaction items
     const itemsResult = await client.query(
-      'SELECT item_id, quantity FROM transaction_items WHERE transaction_id = $1',
+      'SELECT item_name, quantity FROM transaction_items WHERE transaction_id = $1',
       [req.params.id]
     );
     
     // Return items to stock
     for (const item of itemsResult.rows) {
-      await client.query(
-        'UPDATE items SET stock = stock + $1 WHERE id = $2',
-        [item.quantity, item.item_id]
+      // Get the item id from the items table
+      const itemResult = await client.query(
+        'SELECT id FROM items WHERE name = $1',
+        [item.item_name]
       );
+      
+      if (itemResult.rows.length > 0) {
+        await client.query(
+          'UPDATE items SET stock = stock + $1 WHERE id = $2',
+          [item.quantity, itemResult.rows[0].id]
+        );
+      }
     }
     
     // Update transaction status
     await client.query(
-      'UPDATE transactions SET status = $1 WHERE id = $2',
+      'UPDATE transactions SET status = $1, voided_at = NOW() WHERE id = $2',
       ['voided', req.params.id]
     );
-    
+
     await client.query('COMMIT');
-    console.log('Transaction voided successfully');
-    res.status(200).json({ message: 'Transaction voided successfully' });
+    res.json({ success: true });
   } catch (error) {
     await client.query('ROLLBACK');
     console.error('Error voiding transaction:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ error: error.message });
   } finally {
     client.release();
   }
@@ -187,19 +202,107 @@ app.post('/api/transactions/:id/void', async (req, res) => {
 // Admin endpoints
 app.get('/api/daily-report', async (req, res) => {
   try {
-    console.log('GET /api/daily-report');
+    // Set timezone for this connection
+    await pool.query('SET timezone = \'Asia/Singapore\';');
+
+    // Validate and format the date
+    let targetDate;
+    if (!req.query.date || req.query.date === 'CURRENT_DATE') {
+      targetDate = 'CURRENT_DATE';
+    } else {
+      // Parse the date in Singapore timezone
+      const [year, month, day] = req.query.date.split('-');
+      if (!year || !month || !day) {
+        throw new Error('Invalid date format. Please use YYYY-MM-DD');
+      }
+      
+      // Validate each component
+      const numYear = parseInt(year, 10);
+      const numMonth = parseInt(month, 10);
+      const numDay = parseInt(day, 10);
+      
+      if (isNaN(numYear) || isNaN(numMonth) || isNaN(numDay) ||
+          numMonth < 1 || numMonth > 12 || 
+          numDay < 1 || numDay > 31 ||
+          numYear < 2024 || numYear > 2025) {
+        throw new Error('Invalid date values');
+      }
+      
+      targetDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+    }
+    
+    // Query for the actual report
     const result = await pool.query(`
+      WITH target_date AS (
+        SELECT 
+          CASE 
+            WHEN $1 = 'CURRENT_DATE' THEN CURRENT_DATE AT TIME ZONE 'Asia/Singapore'
+            ELSE ($1::date AT TIME ZONE 'Asia/Singapore')
+          END as selected_date
+      ),
+      transactions_with_status AS (
+        SELECT 
+          t.*,
+          CASE 
+            WHEN t.status = 'voided' THEN 0  -- Exclude voided transactions from total
+            ELSE t.total_amount
+          END as effective_amount
+        FROM transactions t
+        WHERE DATE(t.transaction_date AT TIME ZONE 'Asia/Singapore') = (SELECT DATE(selected_date) FROM target_date)
+      ),
+      all_events AS (
+        -- Original transactions
+        SELECT 
+          id,
+          transaction_date AT TIME ZONE 'Asia/Singapore' as event_time,
+          'original' as event_type,
+          status,
+          total_amount,
+          voided_at
+        FROM transactions
+        WHERE DATE(transaction_date AT TIME ZONE 'Asia/Singapore') = (SELECT DATE(selected_date) FROM target_date)
+        
+        UNION ALL
+        
+        -- Void events
+        SELECT 
+          id,
+          voided_at AT TIME ZONE 'Asia/Singapore' as event_time,
+          'void' as event_type,
+          status,
+          total_amount,
+          voided_at
+        FROM transactions
+        WHERE 
+          status = 'voided' AND 
+          DATE(transaction_date AT TIME ZONE 'Asia/Singapore') = (SELECT DATE(selected_date) FROM target_date)
+      ),
+      daily_stats AS (
+        SELECT 
+          d.selected_date::date as date,
+          COUNT(DISTINCT t.id) as total_transactions,
+          COALESCE(SUM(t.effective_amount), 0) as total_sales
+        FROM target_date d
+        LEFT JOIN transactions_with_status t ON true
+        GROUP BY d.selected_date
+      )
       SELECT 
-        DATE(transaction_date AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Singapore') as date,
-        COUNT(*) as total_transactions,
-        SUM(total_amount) as total_sales,
+        ds.date,
+        ds.total_transactions,
+        ds.total_sales,
         COALESCE(
           json_agg(
             json_build_object(
-              'id', t.id,
-              'transaction_date', transaction_date AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Singapore',
-              'total_amount', t.total_amount::float,
-              'status', t.status,
+              'id', e.id,
+              'event_time', e.event_time,
+              'event_type', e.event_type,
+              'status', e.status,
+              'total_amount', e.total_amount::float,
+              'voided_at', CASE 
+                WHEN e.voided_at IS NOT NULL 
+                THEN e.voided_at AT TIME ZONE 'Asia/Singapore' 
+                ELSE NULL 
+              END,
               'items', COALESCE(
                 (
                   SELECT json_agg(
@@ -210,32 +313,31 @@ app.get('/api/daily-report', async (req, res) => {
                     )
                   )
                   FROM transaction_items ti
-                  WHERE ti.transaction_id = t.id
+                  WHERE ti.transaction_id = e.id
                 ),
                 '[]'::json
               )
             )
-            ORDER BY transaction_date DESC
-          ) FILTER (WHERE t.id IS NOT NULL),
-          '[]'
+            ORDER BY e.event_time DESC
+          ) FILTER (WHERE e.id IS NOT NULL),
+          '[]'::json
         ) as transactions
-      FROM transactions t
-      WHERE DATE(transaction_date AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Singapore') = 
-            DATE(NOW() AT TIME ZONE 'Asia/Singapore')
-      AND status = 'completed'
-      GROUP BY DATE(transaction_date AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Singapore')
-    `);
+      FROM daily_stats ds
+      LEFT JOIN all_events e ON true
+      GROUP BY ds.date, ds.total_transactions, ds.total_sales;
+    `, [targetDate]);
     
-    console.log('Daily report:', result.rows[0]);
-    res.json(result.rows[0] || { 
-      date: new Date().toISOString().split('T')[0],
+    const data = result.rows[0] || {
+      date: targetDate === 'CURRENT_DATE' ? new Date().toISOString().split('T')[0] : targetDate,
       total_transactions: 0,
       total_sales: 0,
       transactions: []
-    });
+    };
+    
+    res.json(data);
   } catch (error) {
     console.error('Error fetching daily report:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(400).json({ error: error.message });
   }
 });
 

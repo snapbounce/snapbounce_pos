@@ -10,6 +10,7 @@ services:
       - /usr/src/app/node_modules
     environment:
       - NODE_ENV=development
+      - TZ=Asia/Singapore
     command: npm run dev -- --host
     depends_on:
       - backend
@@ -28,6 +29,7 @@ services:
       - PGPASSWORD=postgres
       - PGDATABASE=snapbounce_pos
       - PGHOST=postgres
+      - TZ=Asia/Singapore
 
   postgres:
     image: postgres:15-alpine
@@ -35,6 +37,7 @@ services:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
       - POSTGRES_DB=snapbounce_pos
+      - TZ=Asia/Singapore
     ports:
       - "5432:5432"
     volumes:
