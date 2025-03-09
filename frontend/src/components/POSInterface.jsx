@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import './POSInterface.css';
 
 export default function POSInterface() {
   const [items, setItems] = useState([]);
@@ -9,6 +10,9 @@ export default function POSInterface() {
   const [error, setError] = useState(null);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [selectedTransaction, setSelectedTransaction] = useState(null);
+  const [showPinModal, setShowPinModal] = useState(false);
+  const [pin, setPin] = useState('');
+  const [transactionToVoid, setTransactionToVoid] = useState(null);
 
   useEffect(() => {
     fetchItems();
@@ -62,45 +66,12 @@ export default function POSInterface() {
         throw new Error('Failed to fetch transactions');
       }
       const data = await response.json();
-      console.log('Fetched transactions:', data);
+      console.log('Number of transactions:', data.length);
+      console.log('First few transactions:', data.slice(0, 3));
       setTransactions(data);
     } catch (error) {
       console.error('Error fetching transactions:', error);
-      console.log('Setting mock data...');
-      // Fallback to mock transactions if API fails
-      const mockTransactions = [
-        {
-          id: 1,
-          transaction_date: '2025-03-07T06:17:00',
-          items: [
-            { item_name: 'bouncy castle 1', quantity: 2, price: 1.00 },
-            { item_name: 'haji belonn', quantity: 1, price: 1.00 }
-          ],
-          total_amount: 3.00,
-          status: 'completed'
-        },
-        {
-          id: 2,
-          transaction_date: '2025-03-06T09:36:00',
-          items: [
-            { item_name: 'bouncy castle', quantity: 3, price: 1.00 }
-          ],
-          total_amount: 3.00,
-          status: 'voided'
-        },
-        {
-          id: 3,
-          transaction_date: '2025-03-06T09:33:00',
-          items: [
-            { item_name: 'bouncy castle 1', quantity: 1, price: 1.00 },
-            { item_name: 'err', quantity: 1, price: 11.00 }
-          ],
-          total_amount: 12.00,
-          status: 'completed'
-        }
-      ];
-      console.log('Mock transactions:', mockTransactions);
-      setTransactions(mockTransactions);
+      setError(error.message);
     } finally {
       setLoading(false);
     }
@@ -180,12 +151,25 @@ export default function POSInterface() {
     }
   };
 
-  const voidTransaction = async (transactionId) => {
+  const handleVoidTransaction = (transactionId) => {
+    setTransactionToVoid(transactionId);
+    setShowPinModal(true);
+    setPin('');
+    setError(null);
+  };
+
+  const handlePinSubmit = async (e) => {
+    e.preventDefault();
     try {
       setLoading(true);
       setError(null);
-      const response = await fetch(`http://localhost:3000/api/transactions/${transactionId}/void`, {
+
+      const response = await fetch(`http://localhost:3000/api/transactions/${transactionToVoid}/void`, {
         method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ pin }),
       });
 
       if (!response.ok) {
@@ -194,9 +178,13 @@ export default function POSInterface() {
       }
 
       await fetchTransactions();
+      setShowPinModal(false);
+      setPin('');
+      setTransactionToVoid(null);
     } catch (error) {
       console.error('Error voiding transaction:', error);
       setError(error.message);
+      setPin(''); // Clear the incorrect PIN
     } finally {
       setLoading(false);
     }
@@ -214,6 +202,44 @@ export default function POSInterface() {
   const handleViewTransactionDetails = (transaction) => {
     setSelectedTransaction(transaction);
   };
+
+  const pinModal = (
+    <div className={`pin-modal ${showPinModal ? 'show' : ''}`}>
+      <div className="modal-content">
+        <h2>Enter Admin PIN</h2>
+        <form onSubmit={handlePinSubmit}>
+          <div className="form-group">
+            <input
+              type="password"
+              value={pin}
+              onChange={(e) => setPin(e.target.value)}
+              placeholder="Enter PIN"
+              maxLength={4}
+              pattern="\d{4}"
+              required
+            />
+          </div>
+          <div className="button-group">
+            <button type="submit" disabled={loading}>
+              {loading ? 'Processing...' : 'Submit'}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setShowPinModal(false);
+                setPin('');
+                setTransactionToVoid(null);
+                setShowTransactionsModal(true);
+              }}
+            >
+              Cancel
+            </button>
+          </div>
+          {error && <div className="error-message">{error}</div>}
+        </form>
+      </div>
+    </div>
+  );
 
   return (
     <div className="pos-container">
@@ -307,30 +333,27 @@ export default function POSInterface() {
 
       {showConfirmModal && (
         <div className="modal-overlay">
-          <div className="modal">
+          <div className="confirmation-modal">
             <div className="modal-header">
               <h2>Confirm Transaction</h2>
               <button className="close-button" onClick={() => setShowConfirmModal(false)}>×</button>
             </div>
             <div className="modal-content">
-              <div className="transaction-items">
+              <div className="order-summary">
                 <h3>Order Summary</h3>
                 {cart.map((item, index) => (
-                  <div key={index} className="transaction-item">
-                    <div className="item-details">
-                      <span className="item-name">{item.name}</span>
-                      <span className="item-quantity">× {item.quantity}</span>
-                    </div>
-                    <span className="item-price">${(item.price * item.quantity).toFixed(2)}</span>
+                  <div key={index} className="order-item">
+                    <span>{item.name} × {item.quantity}</span>
+                    <span>${(item.price * item.quantity).toFixed(2)}</span>
                   </div>
                 ))}
-                <div className="transaction-total">
+                <div className="order-total">
                   <span>Total</span>
                   <span>${calculateTotal().toFixed(2)}</span>
                 </div>
               </div>
 
-              <div className="terms-section">
+              <div className="terms-conditions">
                 <h3>Terms and Conditions</h3>
                 <ul>
                   <li>All sales are final</li>
@@ -339,12 +362,20 @@ export default function POSInterface() {
                 </ul>
               </div>
 
-              <div className="modal-actions">
-                <button className="cancel-btn" onClick={() => setShowConfirmModal(false)}>
+              <div className="button-group">
+                <button
+                  className="secondary-btn"
+                  onClick={() => setShowConfirmModal(false)}
+                  disabled={loading}
+                >
                   Cancel
                 </button>
-                <button className="confirm-btn" onClick={handleConfirmTransaction}>
-                  Confirm Transaction
+                <button
+                  className="primary-btn"
+                  onClick={handleConfirmTransaction}
+                  disabled={loading}
+                >
+                  {loading ? 'Processing...' : 'Confirm'}
                 </button>
               </div>
             </div>
@@ -400,10 +431,10 @@ export default function POSInterface() {
                 >
                   Close
                 </button>
-                {selectedTransaction.status !== 'VOIDED' && (
+                {selectedTransaction.status !== 'voided' && (
                   <button 
                     className="void-btn danger-btn" 
-                    onClick={() => voidTransaction(selectedTransaction.id)}
+                    onClick={() => handleVoidTransaction(selectedTransaction.id)}
                   >
                     Void Transaction
                   </button>
@@ -423,61 +454,61 @@ export default function POSInterface() {
             </div>
             <div className="modal-content">
               <div className="transactions-list">
-                {transactions.map((transaction) => (
-                  <div key={transaction.id} className="transaction-card">
-                    <div className="transaction-info">
-                      <div className="transaction-header">
-                        <span className="transaction-date">
-                          {new Date(transaction.transaction_date).toLocaleString('en-US', {
-                            day: 'numeric',
-                            month: 'short',
-                            year: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit'
-                          })}
-                        </span>
-                        <span className={`transaction-status ${transaction.status.toLowerCase()}`}>
-                          {transaction.status}
-                        </span>
-                      </div>
-                      <div className="transaction-items-summary">
-                        {transaction.items.map((item, idx) => (
-                          <div key={idx} className="transaction-item-brief">
-                            {item.item_name} × {item.quantity} ${(item.price * item.quantity).toFixed(2)}
+                {transactions.length > 0 ? (
+                  transactions.map((transaction) => {
+                    const date = new Date(transaction.transaction_date);
+                    return (
+                      <div key={transaction.id} className="transaction-card">
+                        <div className="transaction-info">
+                          <div className="transaction-date">
+                            {date.toLocaleString('en-SG', {
+                              day: 'numeric',
+                              month: 'short',
+                              year: 'numeric',
+                            })} at {date.toLocaleString('en-SG', {
+                              hour: '2-digit',
+                              minute: '2-digit',
+                              hour12: true
+                            }).toLowerCase()}
                           </div>
-                        ))}
+                          <div className="transaction-amount">
+                            ${transaction.total_amount.toFixed(2)}
+                            {transaction.status === 'voided' && (
+                              <span className="status-label">Voided</span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="transaction-actions">
+                          <button
+                            className="view-details-btn"
+                            onClick={() => {
+                              setShowTransactionsModal(false);
+                              handleViewTransactionDetails(transaction);
+                            }}
+                          >
+                            View Details
+                          </button>
+                          {transaction.status !== 'voided' && (
+                            <button
+                              className="void-btn"
+                              onClick={() => handleVoidTransaction(transaction.id)}
+                            >
+                              Void Transaction
+                            </button>
+                          )}
+                        </div>
                       </div>
-                      <div className="transaction-total">
-                        <span>Total:</span>
-                        <span>${transaction.total_amount.toFixed(2)}</span>
-                      </div>
-                    </div>
-                    <div className="transaction-actions">
-                      {transaction.status !== 'VOIDED' && (
-                        <button
-                          className="void-btn danger-btn"
-                          onClick={() => voidTransaction(transaction.id)}
-                        >
-                          Void Transaction
-                        </button>
-                      )}
-                      <button
-                        className="view-details-btn secondary-btn"
-                        onClick={() => {
-                          setSelectedTransaction(transaction);
-                          setShowTransactionsModal(false);
-                        }}
-                      >
-                        View Details
-                      </button>
-                    </div>
-                  </div>
-                ))}
+                    );
+                  })
+                ) : (
+                  <div>No transactions found</div>
+                )}
               </div>
             </div>
           </div>
         </div>
       )}
+      {pinModal}
     </div>
   );
 }
