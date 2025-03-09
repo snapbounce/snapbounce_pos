@@ -202,142 +202,62 @@ app.post('/api/transactions/:id/void', async (req, res) => {
 // Admin endpoints
 app.get('/api/daily-report', async (req, res) => {
   try {
-    // Set timezone for this connection
-    await pool.query('SET timezone = \'Asia/Singapore\';');
-
-    // Validate and format the date
-    let targetDate;
-    if (!req.query.date || req.query.date === 'CURRENT_DATE') {
-      targetDate = 'CURRENT_DATE';
-    } else {
-      // Parse the date in Singapore timezone
-      const [year, month, day] = req.query.date.split('-');
-      if (!year || !month || !day) {
-        throw new Error('Invalid date format. Please use YYYY-MM-DD');
-      }
-      
-      // Validate each component
-      const numYear = parseInt(year, 10);
-      const numMonth = parseInt(month, 10);
-      const numDay = parseInt(day, 10);
-      
-      if (isNaN(numYear) || isNaN(numMonth) || isNaN(numDay) ||
-          numMonth < 1 || numMonth > 12 || 
-          numDay < 1 || numDay > 31 ||
-          numYear < 2024 || numYear > 2025) {
-        throw new Error('Invalid date values');
-      }
-      
-      targetDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
-    }
+    const { date } = req.query;
     
-    // Query for the actual report
+    // Query for transactions on the selected date
     const result = await pool.query(`
-      WITH target_date AS (
-        SELECT 
-          CASE 
-            WHEN $1 = 'CURRENT_DATE' THEN CURRENT_DATE AT TIME ZONE 'Asia/Singapore'
-            ELSE ($1::date AT TIME ZONE 'Asia/Singapore')
-          END as selected_date
-      ),
-      transactions_with_status AS (
+      WITH daily_transactions AS (
         SELECT 
           t.*,
           CASE 
-            WHEN t.status = 'voided' THEN 0  -- Exclude voided transactions from total
+            WHEN t.status = 'voided' THEN 0
             ELSE t.total_amount
           END as effective_amount
         FROM transactions t
-        WHERE DATE(t.transaction_date AT TIME ZONE 'Asia/Singapore') = (SELECT DATE(selected_date) FROM target_date)
-      ),
-      all_events AS (
-        -- Original transactions
-        SELECT 
-          id,
-          transaction_date AT TIME ZONE 'Asia/Singapore' as event_time,
-          'original' as event_type,
-          status,
-          total_amount,
-          voided_at
-        FROM transactions
-        WHERE DATE(transaction_date AT TIME ZONE 'Asia/Singapore') = (SELECT DATE(selected_date) FROM target_date)
-        
-        UNION ALL
-        
-        -- Void events
-        SELECT 
-          id,
-          voided_at AT TIME ZONE 'Asia/Singapore' as event_time,
-          'void' as event_type,
-          status,
-          total_amount,
-          voided_at
-        FROM transactions
-        WHERE 
-          status = 'voided' AND 
-          DATE(transaction_date AT TIME ZONE 'Asia/Singapore') = (SELECT DATE(selected_date) FROM target_date)
-      ),
-      daily_stats AS (
-        SELECT 
-          d.selected_date::date as date,
-          COUNT(DISTINCT t.id) as total_transactions,
-          COALESCE(SUM(t.effective_amount), 0) as total_sales
-        FROM target_date d
-        LEFT JOIN transactions_with_status t ON true
-        GROUP BY d.selected_date
+        WHERE DATE(t.transaction_date) = $1::date
       )
       SELECT 
-        ds.date,
-        ds.total_transactions,
-        ds.total_sales,
+        $1::date as date,
+        COUNT(DISTINCT id) as total_transactions,
+        COALESCE(SUM(effective_amount), 0) as total_sales,
         COALESCE(
           json_agg(
             json_build_object(
-              'id', e.id,
-              'event_time', e.event_time,
-              'event_type', e.event_type,
-              'status', e.status,
-              'total_amount', e.total_amount::float,
-              'voided_at', CASE 
-                WHEN e.voided_at IS NOT NULL 
-                THEN e.voided_at AT TIME ZONE 'Asia/Singapore' 
-                ELSE NULL 
-              END,
-              'items', COALESCE(
-                (
-                  SELECT json_agg(
-                    json_build_object(
-                      'item_name', ti.item_name,
-                      'quantity', ti.quantity,
-                      'price', ti.price::float
-                    )
+              'id', id,
+              'transaction_date', transaction_date,
+              'total_amount', total_amount::float,
+              'status', status,
+              'items', (
+                SELECT json_agg(
+                  json_build_object(
+                    'item_name', ti.item_name,
+                    'quantity', ti.quantity,
+                    'price', ti.price::float
                   )
-                  FROM transaction_items ti
-                  WHERE ti.transaction_id = e.id
-                ),
-                '[]'::json
+                )
+                FROM transaction_items ti
+                WHERE ti.transaction_id = dt.id
               )
             )
-            ORDER BY e.event_time DESC
-          ) FILTER (WHERE e.id IS NOT NULL),
-          '[]'::json
+            ORDER BY transaction_date DESC
+          ),
+          '[]'
         ) as transactions
-      FROM daily_stats ds
-      LEFT JOIN all_events e ON true
-      GROUP BY ds.date, ds.total_transactions, ds.total_sales;
-    `, [targetDate]);
-    
-    const data = result.rows[0] || {
-      date: targetDate === 'CURRENT_DATE' ? new Date().toISOString().split('T')[0] : targetDate,
+      FROM daily_transactions dt
+      GROUP BY date
+    `, [date]);
+
+    const report = result.rows[0] || {
+      date: date,
       total_transactions: 0,
       total_sales: 0,
       transactions: []
     };
-    
-    res.json(data);
+
+    res.json(report);
   } catch (error) {
-    console.error('Error fetching daily report:', error);
-    res.status(400).json({ error: error.message });
+    console.error('Error generating daily report:', error);
+    res.status(500).json({ error: 'Failed to generate daily report' });
   }
 });
 

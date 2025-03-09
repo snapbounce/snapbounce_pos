@@ -9,14 +9,11 @@ export default function AdminInterface() {
   const [editingItem, setEditingItem] = useState(null);
   const [newItem, setNewItem] = useState({ name: '', price: '', stock: '' });
   const [selectedDate, setSelectedDate] = useState(() => {
-    // Get current date in Singapore timezone
-    const sgDate = new Date().toLocaleString('en-US', { 
-      timeZone: 'Asia/Singapore',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit'
-    });
-    const [month, day, year] = sgDate.split('/');
+    // Get today's date in YYYY-MM-DD format for Singapore timezone
+    const now = new Date();
+    const year = now.toLocaleString('en-US', { timeZone: 'Asia/Singapore', year: 'numeric' });
+    const month = now.toLocaleString('en-US', { timeZone: 'Asia/Singapore', month: '2-digit' });
+    const day = now.toLocaleString('en-US', { timeZone: 'Asia/Singapore', day: '2-digit' });
     return `${year}-${month}-${day}`;
   });
 
@@ -54,7 +51,7 @@ export default function AdminInterface() {
       setLoading(true);
       setError(null);
       
-      const response = await fetch(`/api/daily-report?date=${date}`);
+      const response = await fetch(`http://localhost:3000/api/daily-report?date=${date}`);
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.error || 'Failed to fetch daily report');
@@ -177,15 +174,8 @@ export default function AdminInterface() {
     return Number(price || 0).toFixed(2);
   };
 
-  // Get current date in Singapore timezone for max date
-  const maxDate = new Date().toLocaleString('en-US', { 
-    timeZone: 'Asia/Singapore',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit'
-  });
-  const [month, day, year] = maxDate.split('/');
-  const maxDateFormatted = `${year}-${month}-${day}`;
+  // Get current date in YYYY-MM-DD format for max date
+  const maxDate = new Date().toISOString().split('T')[0];
 
   return (
     <div className="admin-interface">
@@ -212,8 +202,6 @@ export default function AdminInterface() {
             id="reportDate"
             value={selectedDate}
             onChange={(e) => setSelectedDate(e.target.value)}
-            min="2024-01-01"
-            max={maxDateFormatted}
           />
         </div>
 
