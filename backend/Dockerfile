@@ -6,12 +6,18 @@ ENV TZ=Asia/Singapore
 
 WORKDIR /usr/src/app
 
+# Copy package files
 COPY package*.json ./
 
-RUN npm install
+# Install production dependencies only
+RUN npm ci --only=production
 
+# Copy source code
 COPY . .
+
+# Create volume for persistent data
+VOLUME /usr/src/app/data
 
 EXPOSE 3000
 
-CMD ["npm", "start"]
+CMD ["node", "src/index.js"]
