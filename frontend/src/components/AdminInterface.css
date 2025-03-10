@@ -531,3 +531,13 @@ table td:first-child {
 .print-button:hover {
   background-color: #0056b3;
 }
+
+.print-only {
+  display: none;
+}
+
+@media print {
+  .print-only {
+    display: block;
+  }
+}

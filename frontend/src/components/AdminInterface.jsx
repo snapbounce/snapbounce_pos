@@ -341,7 +341,7 @@ export default function AdminInterface() {
 
   return (
     <div className="admin-interface">
-      <h1>Admin Dashboard</h1>
+      <h2 className="admin-header">Admin Dashboard</h2>
 
       {error && (
         <div className="error-message">
@@ -354,8 +354,8 @@ export default function AdminInterface() {
         </div>
       )}
 
-      <section className="settings-section">
-        <h2>Settings</h2>
+      <section className="settings-section print-section">
+        <h3>Settings</h3>
         <div className="pin-settings">
           <button onClick={() => setShowPinSettings(!showPinSettings)}>
             {showPinSettings ? 'Hide PIN Settings' : 'Change Admin PIN'}
@@ -439,7 +439,7 @@ export default function AdminInterface() {
               <h3>Transactions for {formatDate(selectedDate)}</h3>
               {dailyReport.transactions?.length > 0 ? (
                 <>
-                  <div className="report-summary">
+                  <div className="print-only report-summary">
                     <div className="summary-item">
                       <label>Date:</label>
                       <span>{formatDate(selectedDate)}</span>
