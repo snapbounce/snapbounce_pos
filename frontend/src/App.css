@@ -282,6 +282,40 @@ body {
   color: var(--danger-color);
 }
 
+/* Unauthorized Access */
+.unauthorized {
+  text-align: center;
+  padding: 2rem;
+  max-width: 400px;
+  margin: 2rem auto;
+  background-color: #f8f9fa;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.unauthorized h2 {
+  color: #dc3545;
+  margin-bottom: 1rem;
+}
+
+.unauthorized p {
+  color: #6c757d;
+  margin-bottom: 1.5rem;
+}
+
+.unauthorized button {
+  background-color: #007bff;
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.unauthorized button:hover {
+  background-color: #0056b3;
+}
+
 /* Mobile styles */
 @media (max-width: 640px) {
   .pos-content {

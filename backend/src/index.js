@@ -35,7 +35,7 @@ const getAdminPin = async () => {
     const pinPath = path.join(__dirname, 'admin_pin.txt');
     try {
       const pin = await fs.readFile(pinPath, 'utf8');
-      return pin.trim();
+      return pin.trim().replace(/[^0-9]/g, ''); // Remove any non-numeric characters
     } catch (error) {
       // If file doesn't exist, create with default PIN
       await fs.writeFile(pinPath, '1234');
@@ -57,34 +57,42 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
 // PIN management endpoints
-app.post('/api/admin/update-pin', async (req, res) => {
+app.post('/api/update-pin', async (req, res) => {
   try {
-    console.log('Received PIN update request:', req.body);
-    const { pin, confirmPin } = req.body;
+    const { currentPin, newPin } = req.body;
+    const storedPin = await getAdminPin();
 
-    if (!pin || !confirmPin) {
-      console.log('Missing PIN or confirmation');
-      return res.status(400).json({ error: 'PIN and confirmation are required' });
+    if (currentPin !== storedPin) {
+      return res.status(401).json({ error: 'Current PIN is incorrect' });
     }
 
-    if (!/^\d{4}$/.test(pin)) {
-      console.log('Invalid PIN format');
-      return res.status(400).json({ error: 'PIN must be exactly 4 digits' });
+    // Validate new PIN
+    if (!/^\d{4}$/.test(newPin)) {
+      return res.status(400).json({ error: 'New PIN must be exactly 4 digits' });
     }
 
-    if (pin !== confirmPin) {
-      console.log('PINs do not match');
-      return res.status(400).json({ error: 'PINs do not match' });
-    }
-
-    const pinPath = path.join(__dirname, 'admin_pin.txt');
-    await fs.writeFile(pinPath, pin);
-    console.log('PIN updated successfully');
-
-    res.json({ success: true, message: 'PIN updated successfully' });
+    await fs.writeFile(path.join(__dirname, 'admin_pin.txt'), newPin);
+    res.json({ success: true });
   } catch (error) {
     console.error('Error updating PIN:', error);
-    res.status(500).json({ error: 'Failed to update PIN: ' + error.message });
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Add PIN verification endpoint
+app.post('/api/verify-pin', async (req, res) => {
+  try {
+    const { pin } = req.body;
+    const storedPin = await getAdminPin();
+    
+    if (pin === storedPin) {
+      res.json({ success: true });
+    } else {
+      res.status(401).json({ error: 'Invalid PIN' });
+    }
+  } catch (error) {
+    console.error('Error verifying PIN:', error);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 

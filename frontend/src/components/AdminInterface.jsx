@@ -20,6 +20,7 @@ export default function AdminInterface() {
     return localStorage.getItem('adminPin') || '1234';
   });
   const [showPinSettings, setShowPinSettings] = useState(false);
+  const [currentPin, setCurrentPin] = useState('');
   const [newPin, setNewPin] = useState('');
   const [confirmNewPin, setConfirmNewPin] = useState('');
   const [selectedDate, setSelectedDate] = useState(() => {
@@ -206,8 +207,8 @@ export default function AdminInterface() {
     
     try {
       // Basic validation
-      if (!newPin || !confirmNewPin) {
-        throw new Error('Please enter and confirm the PIN');
+      if (!currentPin || !newPin || !confirmNewPin) {
+        throw new Error('Please enter current PIN and new PIN');
       }
 
       if (!/^\d{4}$/.test(newPin)) {
@@ -215,44 +216,43 @@ export default function AdminInterface() {
       }
 
       if (newPin !== confirmNewPin) {
-        throw new Error('PINs do not match');
+        throw new Error('New PINs do not match');
       }
 
       setLoading(true);
       setError(null);
 
-      console.log('Sending PIN update request');
-      const response = await fetch('http://localhost:3000/api/admin/update-pin', {
+      const API_URL = process.env.NODE_ENV === 'production' 
+        ? '/api' 
+        : 'http://localhost:3000/api';
+
+      const response = await fetch(`${API_URL}/update-pin`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          pin: newPin,
-          confirmPin: confirmNewPin
+          currentPin,
+          newPin
         })
       });
 
-      console.log('Response status:', response.status);
       const data = await response.json();
-      console.log('Response data:', data);
 
       if (!response.ok) {
         throw new Error(data.error || 'Failed to update PIN');
       }
 
-      // Update local storage and state
-      localStorage.setItem('adminPin', newPin);
+      // Clear form and show success message
+      setCurrentPin('');
       setNewPin('');
       setConfirmNewPin('');
       setShowPinSettings(false);
       setError(null);
-      alert(data.message || 'PIN updated successfully');
+      alert('PIN updated successfully');
     } catch (error) {
       console.error('Error in handleChangePin:', error);
-      setError(error.message || 'Failed to update PIN');
-      setNewPin('');
-      setConfirmNewPin('');
+      setError(error.message);
     } finally {
       setLoading(false);
     }
@@ -339,6 +339,64 @@ export default function AdminInterface() {
     );
   };
 
+  const renderPinSettings = () => {
+    return (
+      <div className="pin-settings-form">
+        <h3>Change Admin PIN</h3>
+        {error && <div className="error-message">{error}</div>}
+        <form onSubmit={handleChangePin}>
+          <div className="form-group">
+            <label>Current PIN:</label>
+            <input
+              type="password"
+              value={currentPin}
+              onChange={(e) => setCurrentPin(e.target.value.replace(/[^0-9]/g, ''))}
+              maxLength={4}
+              pattern="[0-9]*"
+              inputMode="numeric"
+              required
+              disabled={loading}
+            />
+          </div>
+          <div className="form-group">
+            <label>New PIN:</label>
+            <input
+              type="password"
+              value={newPin}
+              onChange={(e) => setNewPin(e.target.value.replace(/[^0-9]/g, ''))}
+              maxLength={4}
+              pattern="[0-9]*"
+              inputMode="numeric"
+              required
+              disabled={loading}
+            />
+          </div>
+          <div className="form-group">
+            <label>Confirm New PIN:</label>
+            <input
+              type="password"
+              value={confirmNewPin}
+              onChange={(e) => setConfirmNewPin(e.target.value.replace(/[^0-9]/g, ''))}
+              maxLength={4}
+              pattern="[0-9]*"
+              inputMode="numeric"
+              required
+              disabled={loading}
+            />
+          </div>
+          <div className="button-group">
+            <button type="submit" disabled={loading}>
+              {loading ? 'Updating...' : 'Update PIN'}
+            </button>
+            <button type="button" onClick={() => setShowPinSettings(false)} disabled={loading}>
+              Cancel
+            </button>
+          </div>
+        </form>
+      </div>
+    );
+  };
+
   return (
     <div className="admin-interface">
       <h2 className="admin-header">Admin Dashboard</h2>
@@ -361,35 +419,7 @@ export default function AdminInterface() {
             {showPinSettings ? 'Hide PIN Settings' : 'Change Admin PIN'}
           </button>
           
-          {showPinSettings && (
-            <form onSubmit={handleChangePin} className="change-pin-form">
-              <div className="form-group">
-                <input
-                  type="password"
-                  value={newPin}
-                  onChange={(e) => setNewPin(e.target.value)}
-                  placeholder="New PIN"
-                  maxLength={4}
-                  pattern="[0-9]*"
-                  inputMode="numeric"
-                  required
-                />
-              </div>
-              <div className="form-group">
-                <input
-                  type="password"
-                  value={confirmNewPin}
-                  onChange={(e) => setConfirmNewPin(e.target.value)}
-                  placeholder="Confirm New PIN"
-                  maxLength={4}
-                  pattern="[0-9]*"
-                  inputMode="numeric"
-                  required
-                />
-              </div>
-              <button type="submit">Save New PIN</button>
-            </form>
-          )}
+          {showPinSettings && renderPinSettings()}
         </div>
       </section>
 

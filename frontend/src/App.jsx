@@ -1,15 +1,39 @@
-import { useState, useEffect } from 'react'
-import { Link, Routes, Route, useLocation } from 'react-router-dom'
-import POSInterface from './components/POSInterface'
-import AdminInterface from './components/AdminInterface'
-import './App.css'
+import React, { useState, useEffect } from 'react';
+import { Link, Routes, Route, useLocation, useNavigate } from 'react-router-dom';
+import POSInterface from './components/POSInterface';
+import AdminInterface from './components/AdminInterface';
+import PinDialog from './components/PinDialog';
+import './App.css';
 
 function App() {
   const location = useLocation();
+  const navigate = useNavigate();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [showAdmin, setShowAdmin] = useState(false);
+  const [showPinDialog, setShowPinDialog] = useState(false);
 
   const toggleMobileMenu = () => {
     setIsMobileMenuOpen(!isMobileMenuOpen);
+  };
+
+  const handleAdminClick = () => {
+    setShowPinDialog(true);
+  };
+
+  const handlePinVerified = () => {
+    setShowPinDialog(false);
+    setShowAdmin(true);
+    navigate('/admin');
+  };
+
+  const handlePinCancel = () => {
+    setShowPinDialog(false);
+    navigate('/');
+  };
+
+  const handleBackToPOS = () => {
+    setShowAdmin(false);
+    navigate('/');
   };
 
   // Close mobile menu when route changes
@@ -61,17 +85,40 @@ function App() {
             <Link to="/" className={`nav-link ${location.pathname === '/' ? 'active' : ''}`}>
               POS
             </Link>
-            <Link to="/admin" className={`nav-link ${location.pathname === '/admin' ? 'active' : ''}`}>
+            <button 
+              className={`nav-link ${location.pathname === '/admin' ? 'active' : ''}`}
+              onClick={handleAdminClick}
+            >
               Admin
-            </Link>
+            </button>
           </div>
         </div>
       </nav>
 
+      {showPinDialog && (
+        <PinDialog
+          onVerify={handlePinVerified}
+          onCancel={handlePinCancel}
+        />
+      )}
+
       <main className="container">
         <Routes>
           <Route path="/" element={<POSInterface />} />
-          <Route path="/admin" element={<AdminInterface />} />
+          <Route 
+            path="/admin" 
+            element={
+              showAdmin ? (
+                <AdminInterface onBackToPOS={handleBackToPOS} />
+              ) : (
+                <div className="unauthorized">
+                  <h2>Unauthorized Access</h2>
+                  <p>Please use the Admin button to access this page.</p>
+                  <button onClick={() => navigate('/')}>Back to POS</button>
+                </div>
+              )
+            } 
+          />
         </Routes>
       </main>
     </div>
