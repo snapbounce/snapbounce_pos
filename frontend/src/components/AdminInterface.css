@@ -432,3 +432,102 @@ table td:first-child {
 .change-pin-form button:hover {
   background-color: #388E3C;
 }
+
+.print-button {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background-color: #2196f3;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  margin-left: 1rem;
+}
+
+.print-button:hover {
+  background-color: #1976d2;
+}
+
+.print-button svg {
+  width: 16px;
+  height: 16px;
+}
+
+.daily-report-section {
+  margin: 2rem 0;
+}
+
+.report-controls {
+  background-color: #f8f9fa;
+  padding: 1.5rem;
+  border-radius: 8px;
+  margin: 1rem 0;
+}
+
+.report-stats {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 2rem;
+}
+
+.date-control {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.date-control label {
+  font-weight: 500;
+  color: #333;
+}
+
+.date-picker {
+  padding: 0.5rem;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 1rem;
+}
+
+.stats-group {
+  display: flex;
+  gap: 2rem;
+}
+
+.stat-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.stat-item label {
+  font-weight: 500;
+  color: #666;
+}
+
+.stat-item span {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #333;
+}
+
+.print-button {
+  padding: 0.5rem 1rem;
+  background-color: #007bff;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: background-color 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.print-button:hover {
+  background-color: #0056b3;
+}

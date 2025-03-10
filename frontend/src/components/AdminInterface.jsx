@@ -1,9 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import './AdminInterface.css';
+import './AdminInterface.print.css';
 
 export default function AdminInterface() {
   const [items, setItems] = useState([]);
-  const [dailyReport, setDailyReport] = useState({ transactions: [], total_transactions: 0, total_sales: 0 });
+  const [dailyReport, setDailyReport] = useState({
+    total_transactions: 0,
+    total_sales: 0,
+    transactions: []
+  });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [editingItem, setEditingItem] = useState(null);
@@ -66,7 +71,7 @@ export default function AdminInterface() {
         throw new Error(errorData.error || 'Failed to fetch daily report');
       }
       const data = await response.json();
-      setDailyReport(data || { transactions: [], total_transactions: 0, total_sales: 0 });
+      setDailyReport(data || { total_transactions: 0, total_sales: 0, transactions: [] });
     } catch (error) {
       console.error('Error:', error);
       setError(error.message);
@@ -253,6 +258,10 @@ export default function AdminInterface() {
     }
   };
 
+  const handlePrint = () => {
+    window.print();
+  };
+
   const formatTime = (dateString) => {
     try {
       const date = new Date(dateString);
@@ -285,11 +294,16 @@ export default function AdminInterface() {
   };
 
   const formatPrice = (price) => {
-    return Number(price || 0).toFixed(2);
+    if (typeof price === 'string') {
+      price = parseFloat(price);
+    }
+    return (price || 0).toFixed(2);
   };
 
-  // Get current date in YYYY-MM-DD format for max date
-  const maxDate = new Date().toISOString().split('T')[0];
+  const handleDateChange = (e) => {
+    const selectedValue = e.target.value;
+    setSelectedDate(selectedValue);
+  };
 
   const PinModal = () => {
     if (!pinModalOpen) return null;
@@ -379,18 +393,33 @@ export default function AdminInterface() {
         </div>
       </section>
 
-      <section className="daily-report">
+      <section className="daily-report-section">
         <h2>Daily Report</h2>
-        
-        <div className="date-picker">
-          <label htmlFor="reportDate">Select Date: </label>
-          <input 
-            type="date" 
-            id="reportDate"
-            value={selectedDate}
-            onChange={(e) => setSelectedDate(e.target.value)}
-            max={maxDate}
-          />
+        <div className="report-controls">
+          <div className="report-stats">
+            <div className="date-control">
+              <label>Date:</label>
+              <input
+                type="date"
+                value={selectedDate}
+                onChange={(e) => setSelectedDate(e.target.value)}
+                className="date-picker"
+              />
+            </div>
+            <div className="stats-group">
+              <div className="stat-item">
+                <label>Total Transactions:</label>
+                <span>{dailyReport?.total_transactions || 0}</span>
+              </div>
+              <div className="stat-item">
+                <label>Total Sales:</label>
+                <span>${formatPrice(dailyReport?.total_sales)}</span>
+              </div>
+            </div>
+            <button onClick={handlePrint} className="print-button">
+              Print Report
+            </button>
+          </div>
         </div>
 
         {loading ? (
@@ -406,60 +435,68 @@ export default function AdminInterface() {
           </div>
         ) : (
           <>
-            <div className="report-summary">
-              <div className="summary-item">
-                <label>Total Transactions:</label>
-                <span>{dailyReport.total_transactions}</span>
-              </div>
-              <div className="summary-item">
-                <label>Total Sales:</label>
-                <span>${formatPrice(dailyReport.total_sales)}</span>
-              </div>
-            </div>
-
             <div className="transactions-table">
               <h3>Transactions for {formatDate(selectedDate)}</h3>
               {dailyReport.transactions?.length > 0 ? (
-                <table>
-                  <thead>
-                    <tr>
-                      <th>ID</th>
-                      <th>Time</th>
-                      <th>Items</th>
-                      <th>Total</th>
-                      <th>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {dailyReport.transactions.map(transaction => (
-                      <tr key={`transaction-${transaction.id}`} className={transaction.status === 'voided' ? 'voided-transaction' : ''}>
-                        <td>#{transaction.id}</td>
-                        <td>{formatTime(transaction.transaction_date)}</td>
-                        <td>
-                          {transaction.items?.map((item, index) => (
-                            <div key={`item-${transaction.id}-${index}`}>
-                              {item.item_name} × {item.quantity}
-                            </div>
-                          ))}
-                        </td>
-                        <td>${formatPrice(transaction.total_amount)}</td>
-                        <td>
-                          {transaction.status !== 'voided' && (
-                            <button 
-                              onClick={() => handleVoidTransaction(transaction.id)}
-                              className="void-button"
-                            >
-                              Void
-                            </button>
-                          )}
-                          {transaction.status === 'voided' && (
-                            <span className="voided-badge">VOIDED</span>
-                          )}
-                        </td>
+                <>
+                  <div className="report-summary">
+                    <div className="summary-item">
+                      <label>Date:</label>
+                      <span>{formatDate(selectedDate)}</span>
+                    </div>
+                    <div className="summary-item">
+                      <label>Total Transactions:</label>
+                      <span>{dailyReport?.total_transactions || 0}</span>
+                    </div>
+                    <div className="summary-item">
+                      <label>Total Sales:</label>
+                      <span>${formatPrice(dailyReport?.total_sales)}</span>
+                    </div>
+                  </div>
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>ID</th>
+                        <th>Time</th>
+                        <th>Items</th>
+                        <th>Total</th>
+                        <th className="actions-column">Actions</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {dailyReport.transactions.map(transaction => (
+                        <tr key={`transaction-${transaction.id}`} className={transaction.status === 'voided' ? 'voided-transaction' : ''}>
+                          <td>#{transaction.id}</td>
+                          <td>{formatTime(transaction.transaction_date)}</td>
+                          <td>
+                            {transaction.items?.map((item, index) => (
+                              <div key={`item-${transaction.id}-${index}`} className="transaction-item">
+                                {item.item_name} × {item.quantity} @ ${formatPrice(item.price)}
+                              </div>
+                            ))}
+                          </td>
+                          <td>${formatPrice(transaction.total_amount)}</td>
+                          <td className="actions-column">
+                            {transaction.status !== 'voided' && (
+                              <button 
+                                onClick={() => handleVoidTransaction(transaction.id)}
+                                className="void-button"
+                              >
+                                Void
+                              </button>
+                            )}
+                            {transaction.status === 'voided' && (
+                              <span className="voided-badge">VOIDED</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <div className="report-footer">
+                    Report generated on {new Date().toLocaleString('en-US', { timeZone: 'Asia/Singapore' })}
+                  </div>
+                </>
               ) : (
                 <div className="no-transactions">No transactions found for this date</div>
               )}

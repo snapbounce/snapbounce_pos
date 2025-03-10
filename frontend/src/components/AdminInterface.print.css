@@ -1,0 +1,113 @@
+@media print {
+  /* Reset all margins and padding */
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  /* Hide navigation and other UI elements */
+  nav, 
+  .nav-links,
+  .print-button,
+  .void-button,
+  .inventory-management,
+  .report-controls {
+    display: none !important;
+  }
+
+  /* Main report container */
+  .daily-report-section {
+    width: 100%;
+    padding: 20px;
+    font-size: 12px;
+  }
+
+  /* Report header */
+  .daily-report-section h2 {
+    text-align: center;
+    font-size: 18px;
+    margin-bottom: 20px;
+  }
+
+  /* Transactions table */
+  .transactions-table {
+    width: 100%;
+    margin-top: 20px;
+  }
+
+  .transactions-table h3 {
+    font-size: 14px;
+    margin-bottom: 10px;
+  }
+
+  .transactions-table table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  .transactions-table th,
+  .transactions-table td {
+    border: 1px solid #ddd;
+    padding: 8px;
+    text-align: left;
+    font-size: 12px;
+  }
+
+  .transactions-table th {
+    background-color: #f5f5f5 !important;
+    font-weight: bold;
+  }
+
+  /* Voided transaction styling */
+  .voided-transaction {
+    color: #666;
+  }
+
+  .voided-transaction td {
+    position: relative;
+  }
+
+  .voided-transaction td:first-child::after {
+    content: "(VOIDED)";
+    color: #d32f2f;
+    font-size: 10px;
+    margin-left: 5px;
+  }
+
+  /* Hide action column */
+  .actions-column {
+    display: none !important;
+  }
+
+  /* Summary section at the top */
+  .report-summary {
+    margin: 20px 0;
+    padding: 10px;
+    border: 1px solid #ddd;
+    display: flex;
+    justify-content: space-between;
+  }
+
+  .summary-item {
+    display: flex;
+    gap: 10px;
+  }
+
+  .summary-item label {
+    font-weight: bold;
+  }
+
+  /* Footer */
+  .report-footer {
+    margin-top: 20px;
+    text-align: center;
+    font-size: 10px;
+    color: #666;
+  }
+
+  /* Ensure page breaks don't cut through transactions */
+  tr {
+    page-break-inside: avoid;
+  }
+}

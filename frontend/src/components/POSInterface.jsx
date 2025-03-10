@@ -243,13 +243,6 @@ export default function POSInterface() {
 
   return (
     <div className="pos-container">
-      <header className="pos-header">
-        <h1>SnapBounce POS</h1>
-        <button className="view-transactions-btn" onClick={handleViewTransactions}>
-          View Transactions
-        </button>
-      </header>
-      
       <div className="pos-content">
         <div className="items-panel">
           {loading ? (
@@ -280,6 +273,9 @@ export default function POSInterface() {
         <div className="cart-panel">
           <div className="cart-header">
             <h2>Current Transaction</h2>
+            <button className="view-transactions-btn" onClick={handleViewTransactions}>
+              View Transactions
+            </button>
           </div>
           <div className="cart-content">
             {cart.length === 0 ? (
