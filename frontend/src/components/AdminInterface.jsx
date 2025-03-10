@@ -8,6 +8,15 @@ export default function AdminInterface() {
   const [error, setError] = useState(null);
   const [editingItem, setEditingItem] = useState(null);
   const [newItem, setNewItem] = useState({ name: '', price: '', stock: '' });
+  const [pinModalOpen, setPinModalOpen] = useState(false);
+  const [pin, setPin] = useState('');
+  const [transactionToVoid, setTransactionToVoid] = useState(null);
+  const [adminPin, setAdminPin] = useState(() => {
+    return localStorage.getItem('adminPin') || '1234';
+  });
+  const [showPinSettings, setShowPinSettings] = useState(false);
+  const [newPin, setNewPin] = useState('');
+  const [confirmNewPin, setConfirmNewPin] = useState('');
   const [selectedDate, setSelectedDate] = useState(() => {
     // Get today's date in YYYY-MM-DD format for Singapore timezone
     const now = new Date();
@@ -126,14 +135,119 @@ export default function AdminInterface() {
       const response = await fetch(`http://localhost:3000/api/items/${id}`, {
         method: 'DELETE',
       });
+      console.log('Delete response status:', response.status);
+      
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to delete item');
+        let errorMessage = 'Failed to delete item';
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.error || errorMessage;
+        } catch (e) {
+          console.error('Error parsing error response:', e);
+        }
+        throw new Error(errorMessage);
       }
+      
       await fetchItems();
+      console.log('Item deleted successfully');
     } catch (error) {
       console.error('Error deleting item:', error);
       setError(error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVoidTransaction = (transactionId) => {
+    setTransactionToVoid(transactionId);
+    setPinModalOpen(true);
+    setPin(''); // Clear any previous PIN
+    setError(null);
+  };
+
+  const handlePinSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await fetch(`http://localhost:3000/api/transactions/${transactionToVoid}/void`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ pin }),
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to void transaction');
+      }
+      
+      await fetchDailyReport(selectedDate);
+      setPinModalOpen(false);
+      setPin('');
+      setTransactionToVoid(null);
+    } catch (error) {
+      console.error('Error voiding transaction:', error);
+      setError(error.message);
+      setPin(''); // Clear the incorrect PIN
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleChangePin = async (e) => {
+    e.preventDefault();
+    
+    try {
+      // Basic validation
+      if (!newPin || !confirmNewPin) {
+        throw new Error('Please enter and confirm the PIN');
+      }
+
+      if (!/^\d{4}$/.test(newPin)) {
+        throw new Error('PIN must be exactly 4 digits');
+      }
+
+      if (newPin !== confirmNewPin) {
+        throw new Error('PINs do not match');
+      }
+
+      setLoading(true);
+      setError(null);
+
+      console.log('Sending PIN update request');
+      const response = await fetch('http://localhost:3000/api/admin/update-pin', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          pin: newPin,
+          confirmPin: confirmNewPin
+        })
+      });
+
+      console.log('Response status:', response.status);
+      const data = await response.json();
+      console.log('Response data:', data);
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to update PIN');
+      }
+
+      // Update local storage and state
+      localStorage.setItem('adminPin', newPin);
+      setNewPin('');
+      setConfirmNewPin('');
+      setShowPinSettings(false);
+      setError(null);
+      alert(data.message || 'PIN updated successfully');
+    } catch (error) {
+      console.error('Error in handleChangePin:', error);
+      setError(error.message || 'Failed to update PIN');
+      setNewPin('');
+      setConfirmNewPin('');
     } finally {
       setLoading(false);
     }
@@ -177,6 +291,40 @@ export default function AdminInterface() {
   // Get current date in YYYY-MM-DD format for max date
   const maxDate = new Date().toISOString().split('T')[0];
 
+  const PinModal = () => {
+    if (!pinModalOpen) return null;
+    
+    return (
+      <div className="modal-overlay">
+        <div className="modal">
+          <h3>Enter Admin PIN</h3>
+          <form onSubmit={handlePinSubmit}>
+            <input
+              type="password"
+              value={pin}
+              onChange={(e) => setPin(e.target.value)}
+              placeholder="Enter PIN"
+              maxLength={4}
+              pattern="[0-9]*"
+              inputMode="numeric"
+              required
+              autoFocus
+            />
+            <div className="modal-buttons">
+              <button type="button" onClick={() => {
+                setPinModalOpen(false);
+                setPin('');
+                setTransactionToVoid(null);
+                setError(null);
+              }}>Cancel</button>
+              <button type="submit">Confirm</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="admin-interface">
       <h1>Admin Dashboard</h1>
@@ -192,6 +340,45 @@ export default function AdminInterface() {
         </div>
       )}
 
+      <section className="settings-section">
+        <h2>Settings</h2>
+        <div className="pin-settings">
+          <button onClick={() => setShowPinSettings(!showPinSettings)}>
+            {showPinSettings ? 'Hide PIN Settings' : 'Change Admin PIN'}
+          </button>
+          
+          {showPinSettings && (
+            <form onSubmit={handleChangePin} className="change-pin-form">
+              <div className="form-group">
+                <input
+                  type="password"
+                  value={newPin}
+                  onChange={(e) => setNewPin(e.target.value)}
+                  placeholder="New PIN"
+                  maxLength={4}
+                  pattern="[0-9]*"
+                  inputMode="numeric"
+                  required
+                />
+              </div>
+              <div className="form-group">
+                <input
+                  type="password"
+                  value={confirmNewPin}
+                  onChange={(e) => setConfirmNewPin(e.target.value)}
+                  placeholder="Confirm New PIN"
+                  maxLength={4}
+                  pattern="[0-9]*"
+                  inputMode="numeric"
+                  required
+                />
+              </div>
+              <button type="submit">Save New PIN</button>
+            </form>
+          )}
+        </div>
+      </section>
+
       <section className="daily-report">
         <h2>Daily Report</h2>
         
@@ -202,6 +389,7 @@ export default function AdminInterface() {
             id="reportDate"
             value={selectedDate}
             onChange={(e) => setSelectedDate(e.target.value)}
+            max={maxDate}
           />
         </div>
 
@@ -239,33 +427,33 @@ export default function AdminInterface() {
                       <th>Time</th>
                       <th>Items</th>
                       <th>Total</th>
+                      <th>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     {dailyReport.transactions.map(transaction => (
-                      <tr 
-                        key={`${transaction.id}-${transaction.event_type}`}
-                        className={transaction.event_type === 'void' ? 'voided-transaction' : ''}
-                      >
+                      <tr key={`transaction-${transaction.id}`} className={transaction.status === 'voided' ? 'voided-transaction' : ''}>
                         <td>#{transaction.id}</td>
-                        <td>
-                          {formatTime(transaction.event_time)}
-                          {transaction.event_type === 'void' && (
-                            <span className="voided-badge">VOIDED</span>
-                          )}
-                        </td>
+                        <td>{formatTime(transaction.transaction_date)}</td>
                         <td>
                           {transaction.items?.map((item, index) => (
-                            <div key={index}>
+                            <div key={`item-${transaction.id}-${index}`}>
                               {item.item_name} × {item.quantity}
                             </div>
                           ))}
                         </td>
+                        <td>${formatPrice(transaction.total_amount)}</td>
                         <td>
-                          {transaction.event_type === 'void' ? (
-                            `-$${formatPrice(transaction.total_amount)}`
-                          ) : (
-                            `$${formatPrice(transaction.total_amount)}`
+                          {transaction.status !== 'voided' && (
+                            <button 
+                              onClick={() => handleVoidTransaction(transaction.id)}
+                              className="void-button"
+                            >
+                              Void
+                            </button>
+                          )}
+                          {transaction.status === 'voided' && (
+                            <span className="voided-badge">VOIDED</span>
                           )}
                         </td>
                       </tr>
@@ -278,6 +466,7 @@ export default function AdminInterface() {
             </div>
           </>
         )}
+        <PinModal />
       </section>
 
       <section className="inventory-management">

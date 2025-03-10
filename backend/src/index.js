@@ -5,11 +5,12 @@ const express = require('express');
 const cors = require('cors');
 const { Pool } = require('pg');
 const path = require('path');
+const fs = require('fs').promises; // Use promises version for async/await
 
 const app = express();
 const port = 3000;
 
-// Database connection
+// Database configuration
 const pool = new Pool({
   user: process.env.PGUSER || 'postgres',
   host: process.env.PGHOST || 'postgres',
@@ -18,30 +19,74 @@ const pool = new Pool({
   port: process.env.PGPORT || 5432,
 });
 
+// Test database connection
+pool.connect()
+  .then(() => console.log('Successfully connected to PostgreSQL'))
+  .catch(err => console.error('Error connecting to PostgreSQL:', err));
+
 // Set timezone for PostgreSQL connection
 pool.on('connect', (client) => {
   client.query('SET timezone = "Asia/Singapore";');
 });
 
-// Test database connection
-pool.query('SELECT NOW()', (err, res) => {
-  if (err) {
-    console.error('Error connecting to the database:', err);
-  } else {
-    console.log('Connected to database at:', res.rows[0].now);
+// Function to get admin PIN
+const getAdminPin = async () => {
+  try {
+    const pinPath = path.join(__dirname, 'admin_pin.txt');
+    try {
+      const pin = await fs.readFile(pinPath, 'utf8');
+      return pin.trim();
+    } catch (error) {
+      // If file doesn't exist, create with default PIN
+      await fs.writeFile(pinPath, '1234');
+      return '1234';
+    }
+  } catch (error) {
+    console.error('Error reading admin PIN:', error);
+    return '1234';
   }
-});
+};
 
-// CORS configuration
+// Middleware
 app.use(cors({
   origin: '*',
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
-
-// Middleware
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
+
+// PIN management endpoints
+app.post('/api/admin/update-pin', async (req, res) => {
+  try {
+    console.log('Received PIN update request:', req.body);
+    const { pin, confirmPin } = req.body;
+
+    if (!pin || !confirmPin) {
+      console.log('Missing PIN or confirmation');
+      return res.status(400).json({ error: 'PIN and confirmation are required' });
+    }
+
+    if (!/^\d{4}$/.test(pin)) {
+      console.log('Invalid PIN format');
+      return res.status(400).json({ error: 'PIN must be exactly 4 digits' });
+    }
+
+    if (pin !== confirmPin) {
+      console.log('PINs do not match');
+      return res.status(400).json({ error: 'PINs do not match' });
+    }
+
+    const pinPath = path.join(__dirname, 'admin_pin.txt');
+    await fs.writeFile(pinPath, pin);
+    console.log('PIN updated successfully');
+
+    res.json({ success: true, message: 'PIN updated successfully' });
+  } catch (error) {
+    console.error('Error updating PIN:', error);
+    res.status(500).json({ error: 'Failed to update PIN: ' + error.message });
+  }
+});
 
 // Serve admin page
 app.get('/admin', (req, res) => {
@@ -90,9 +135,10 @@ app.get('/api/transactions', async (req, res) => {
           '[]'
         ) as items
       FROM transactions t
+      WHERE DATE(t.transaction_date) = CURRENT_DATE
       ORDER BY t.transaction_date DESC
     `);
-    console.log('Transactions:', result.rows);
+    console.log('Found transactions:', result.rows.length);
     res.json(result.rows);
   } catch (error) {
     console.error('Error fetching transactions:', error);
@@ -155,47 +201,61 @@ app.post('/api/transactions', async (req, res) => {
 });
 
 app.post('/api/transactions/:id/void', async (req, res) => {
-  const client = await pool.connect();
   try {
-    await client.query('BEGIN');
-    console.log('Voiding transaction:', req.params.id);
+    const { pin } = req.body;
     
-    // Get transaction items
-    const itemsResult = await client.query(
-      'SELECT item_name, quantity FROM transaction_items WHERE transaction_id = $1',
-      [req.params.id]
-    );
-    
-    // Return items to stock
-    for (const item of itemsResult.rows) {
-      // Get the item id from the items table
-      const itemResult = await client.query(
-        'SELECT id FROM items WHERE name = $1',
-        [item.item_name]
+    if (!pin) {
+      return res.status(400).json({ error: 'PIN is required' });
+    }
+
+    const storedPin = await getAdminPin();
+
+    if (pin !== storedPin) {
+      return res.status(401).json({ error: 'Invalid PIN' });
+    }
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      
+      // Get transaction items
+      const itemsResult = await client.query(
+        'SELECT item_name, quantity FROM transaction_items WHERE transaction_id = $1',
+        [req.params.id]
       );
       
-      if (itemResult.rows.length > 0) {
-        await client.query(
-          'UPDATE items SET stock = stock + $1 WHERE id = $2',
-          [item.quantity, itemResult.rows[0].id]
+      // Return items to stock
+      for (const item of itemsResult.rows) {
+        const itemResult = await client.query(
+          'SELECT id FROM items WHERE name = $1',
+          [item.item_name]
         );
+        
+        if (itemResult.rows.length > 0) {
+          await client.query(
+            'UPDATE items SET stock = stock + $1 WHERE id = $2',
+            [item.quantity, itemResult.rows[0].id]
+          );
+        }
       }
-    }
-    
-    // Update transaction status
-    await client.query(
-      'UPDATE transactions SET status = $1, voided_at = NOW() WHERE id = $2',
-      ['voided', req.params.id]
-    );
+      
+      // Update transaction status
+      await client.query(
+        'UPDATE transactions SET status = $1, voided_at = NOW() WHERE id = $2',
+        ['voided', req.params.id]
+      );
 
-    await client.query('COMMIT');
-    res.json({ success: true });
+      await client.query('COMMIT');
+      res.json({ success: true, message: 'Transaction voided successfully' });
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
   } catch (error) {
-    await client.query('ROLLBACK');
     console.error('Error voiding transaction:', error);
-    res.status(500).json({ error: error.message });
-  } finally {
-    client.release();
+    res.status(500).json({ error: error.message || 'Failed to void transaction' });
   }
 });
 
@@ -299,8 +359,15 @@ app.delete('/api/items/:id', async (req, res) => {
     await client.query('BEGIN');
     console.log('DELETE /api/items:', req.params.id);
     
-    // First delete from transaction_items
-    await client.query('DELETE FROM transaction_items WHERE item_id = $1', [req.params.id]);
+    // First get the item name
+    const itemResult = await client.query('SELECT name FROM items WHERE id = $1', [req.params.id]);
+    if (itemResult.rows.length === 0) {
+      throw new Error('Item not found');
+    }
+    const itemName = itemResult.rows[0].name;
+    
+    // Delete from transaction_items using item_name
+    await client.query('DELETE FROM transaction_items WHERE item_name = $1', [itemName]);
     
     // Then delete the item
     await client.query('DELETE FROM items WHERE id = $1', [req.params.id]);
@@ -311,7 +378,7 @@ app.delete('/api/items/:id', async (req, res) => {
   } catch (error) {
     await client.query('ROLLBACK');
     console.error('Error deleting item:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ error: error.message });
   } finally {
     client.release();
   }
